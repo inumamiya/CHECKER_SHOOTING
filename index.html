@@ -409,6 +409,18 @@
         eb.push({ x: cx, y: cy, vx: -0.2, vy: 3.2, color: "#fff", ttl: 220 });
     }
 
+
+    function fireAimFan(cx, cy, count, spread, vmin, vmax, color, ttl){
+    const tx = player.x + 16, ty = player.y + 16;
+    const base = Math.atan2(ty - cy, tx - cx);
+    for(let i=0;i<count;i++){
+        const t = (count === 1) ? 0 : (i/(count-1))*2 - 1; // -1..1
+        const ang = base + t*spread;
+        const spd = vmin + Math.random()*(vmax - vmin);
+        eb.push({ x: cx, y: cy, vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd, color, ttl });
+    }
+}
+
     // ★妻子を殴ろう：塊 → 停止 → 花火拡散
 function spawnClusterAim(){
     const cx = clamp(boss.x + 100, 10, W-10);
@@ -479,33 +491,30 @@ function explodeCluster(e){
     for(let i=0;i<n;i++){
         const t = (i/(n-1))*2 - 1;   // -1..1
         const ang = base + t*spread + (Math.random()-0.5)*0.05;
-        const spd = (e.small ? 3.6 : 4.2) + Math.random()*1.6;
+        const spd2 = (e.small ? 3.6 : 4.2) + Math.random()*1.6;
         eb.push({
             x: e.x, y: e.y,
-            vx: Math.cos(ang)*spd,
-            vy: Math.sin(ang)*spd,
+            vx: Math.cos(ang)*spd2,
+            vy: Math.sin(ang)*spd2,
             color: "#ffffff",
             ttl: 200
         });
     }
-}
 
-
-    // 3) 追い打ち：少し遅い弾も混ぜて「抜けたと思ったら刺さる」やつ
+    // 3) 追い打ち：遅め弾（抜けたと思ったら刺さる）
     const n2 = e.small ? 18 : 26;
     for(let i=0;i<n2;i++){
         const ang = base + (Math.random()*2-1) * (spread*0.9);
-        const spd = 2.2 + Math.random()*1.0;
+        const spd3 = 2.2 + Math.random()*1.0;
         eb.push({
             x: e.x, y: e.y,
-            vx: Math.cos(ang)*spd,
-            vy: Math.sin(ang)*spd,
+            vx: Math.cos(ang)*spd3,
+            vy: Math.sin(ang)*spd3,
             color: "#f0f",
             ttl: 260
         });
     }
 
-    // 効果音（既存の雰囲気を壊さず“重め”に）
     playSE(180, 'sawtooth', 0.12, 0.10);
     playSE(90,  'square',   0.10, 0.08);
 }
@@ -689,15 +698,7 @@ if (boss.phase === 1) {
     const cx = clamp(boss.x + 100, 10, W-10);
     const cy = clamp(boss.y + 120, 10, H-10);
 
-    // メイン：自機狙いの太い扇（届くやつ）
-    if (frames % 12 === 0) {
-        fireAimFan(cx, cy, 9, 0.55, 4.6, 6.0, "#fff", 420);
-    }
 
-    // 追撃：少し遅い弾を混ぜて「抜けたと思ったら刺さる」
-    if (frames % 24 === 10) {
-        fireAimFan(cx, cy, 6, 0.35, 3.2, 4.2, "#ffb7ff", 520);
-    }
 } else {
 
 
@@ -973,6 +974,7 @@ if (boss.phase === 1) {
 </script>
 </body>
 </html>
+
 
 
 
