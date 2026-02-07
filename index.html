@@ -410,6 +410,28 @@
         eb.push({ x: cx, y: cy, vx: -0.2, vy: 3.2, color: "#fff", ttl: 220 });
     }
 
+    // 画面下から縦に湧き出る弾（上へ）
+// count: 本数 / speed: 速度 / jitter: ばらつき / color: 色 / ttl: 生存フレーム
+function spawnBottomRisers(count=10, speed=4.8, jitter=18, color="#fff", ttl=220){
+    for(let i=0;i<count;i++){
+        const x = Math.random() * (W - 10) + 5;      // 画面内ランダム
+        const y = H + 8 + Math.random()*24;          // 画面下ちょい外
+        const vx = (Math.random()-0.5) * 0.4;        // ほぼ真上
+        const vy = - (speed + Math.random()*1.8);    // 上へ
+        // 「縦に湧き出る感」：細い縦ブレを少し
+        const x2 = x + (Math.random()*2-1) * jitter * 0.15;
+
+        eb.push({
+            x: x2,
+            y: y,
+            vx: vx,
+            vy: vy,
+            color: color,
+            ttl: ttl
+        });
+    }
+}
+
 
     function fireAimFan(cx, cy, count, spread, vmin, vmax, color, ttl){
     const tx = player.x + 16, ty = player.y + 16;
@@ -692,16 +714,36 @@ function explodeCluster(e){
                 }
 
 if (boss.phase === 1) {
-    // ★妻子を殴ろう：塊（花火）＋ 自機狙い扇状弾で「殴ってくる」圧を出す
+    // 既存：塊（花火）
     if (frames % 24 === 0) spawnClusterAim();
     if (frames % 48 === 6) spawnClusterAim();
 
-    const cx = clamp(boss.x + 100, 10, W-10);
-    const cy = clamp(boss.y + 120, 10, H-10);
+    // ★追加：画面下から縦に湧き出る弾
+    if (frames % 4 === 0)
+        spawnBottomRisers(6, 5.2, 22, "#ffffff", 260);
 
+    if (frames % 18 === 0)
+        spawnBottomRisers(10, 4.2, 26, "#ffb7ff", 320);
 
 } else {
 
+    // ★ phase 2 以降の既存弾幕（そのまま）
+    if (frames % 30 === 0) {
+        let count = 12 + boss.phase * 8;
+        const cx = clamp(boss.x + 100, 10, W-10);
+        const cy = clamp(boss.y + 100, 10, H-10);
+        for (let i = 0; i < count; i++) {
+            let a = i * (Math.PI * 2 / count) + (frames * 0.05);
+            eb.push({
+                x: cx,
+                y: cy,
+                vx: Math.cos(a) * 3,
+                vy: Math.sin(a) * 3,
+                ttl: 240
+            });
+        }
+    }
+}
 
                     if (frames % 30 === 0) {
                         let count = 12 + boss.phase * 8;
@@ -774,7 +816,8 @@ if (boss.phase === 1) {
 
             e.x += e.vx; e.y += e.vy;
             if (bombEffect > 0) return false;
-            if (!inRange(e.x, e.y, 40)) return false;
+if (!inRange(e.x, e.y, 120)) return false;
+
 
             let d = Math.hypot(e.x - (player.x + 16), e.y - (player.y + 16));
             if (d < 30 && d > 10 && !e.g) { e.g = 1; graze++; score += 50; playSE(1800, 'sine', 0.05, 0.02); }
@@ -975,6 +1018,7 @@ if (boss.phase === 1) {
 </script>
 </body>
 </html>
+
 
 
 
