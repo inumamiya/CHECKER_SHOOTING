@@ -719,8 +719,8 @@ if (boss.phase === 1) {
     if (frames % 48 === 6) spawnClusterAim();
 
     // ★追加：画面下から縦に湧き出る弾
-    if (frames % 8 === 0)  spawnBottomRisers(6, 5.2, 22, "#ffffff", 260);
-    if (frames % 18 === 0) spawnBottomRisers(10, 4.2, 26, "#ffb7ff", 320);
+    if (frames % 18 === 0)  spawnBottomRisers(1, 1.0, 22, "#ffffff", 260);
+    if (frames % 18 === 0) spawnBottomRisers(2, 2.2, 26, "#ffb7ff", 320);
 
 } else {
     // phase 2 以降（元のやつ）
@@ -997,6 +997,7 @@ if (!inRange(e.x, e.y, 120)) return false;
 </script>
 </body>
 </html>
+
 
 
 
