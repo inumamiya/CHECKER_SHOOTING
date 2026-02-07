@@ -5,7 +5,6 @@
     <title>CHECKER SHOOTING - Amakusa Slot & Revin Spell Fix</title>
     <style>
         body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; font-family: 'Georgia', serif; }
-        #game-outer { position: relative; padding: 10px; background: #202; border: 2px solid #505; box-shadow: 0 0 30px #808; }
         #game-container { position: relative; display: flex; border: 4px solid #404; background: #000; }
         canvas { background: #000; display: block; image-rendering: pixelated; }
         #side-panel { width: 220px; height: 512px; background: #1a001a; border-left: 3px solid #404; color: #fff; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
@@ -38,18 +37,16 @@
         #tweet-btn:hover { background: rgba(70,0,70,0.9); }
         #tweet-note { color:#ffb7ff; font-size: 12px; opacity: 0.9; }
 
-        #controls-note{
-  color:#ff88ff;
-  font-size:14px;
-  text-align:center;
-  margin-top:8px;
-  text-shadow:0 0 8px rgba(255,136,255,0.35);
-}
+#game-outer {
+  position: relative;
+  padding: 10px;
+  background: #202;
+  border: 2px solid #505;
+  box-shadow: 0 0 30px #808;
 
-        #game-outer{
-  display:flex;
-  flex-direction:column; /* ← これが重要 */
-  align-items:center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 #controls-note{
@@ -59,7 +56,6 @@
   margin-top:10px;
   text-shadow:0 0 8px rgba(255,136,255,0.35);
 }
-
     </style>
 </head>
 <body>
@@ -904,5 +900,6 @@
 </script>
 </body>
 </html>
+
 
 
