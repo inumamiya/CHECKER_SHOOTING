@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>CHECKER SHOOTING - Amakusa Slot & Revin Spell Fix</title>
+    <style>
+        body { background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; font-family: 'Georgia', serif; }
+        #game-outer { position: relative; padding: 10px; background: #202; border: 2px solid #505; box-shadow: 0 0 30px #808; }
+        #game-container { position: relative; display: flex; border: 4px solid #404; background: #000; }
+        canvas { background: #000; display: block; image-rendering: pixelated; }
+        #side-panel { width: 220px; height: 512px; background: #1a001a; border-left: 3px solid #404; color: #fff; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .ui-label { color: #ff88ff; font-size: 13px; margin-bottom: 5px; }
+        .ui-value { font-size: 24px; text-align: right; font-weight: bold; margin-bottom: 12px; font-family: 'Courier New', monospace; color: #fff; }
+        .icon-container { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 15px; }
+        .star-p { color: #ff44ff; font-size: 20px; }
+        .star-b { color: #44ff44; font-size: 20px; }
+
+        #tweet-ui {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 50;
+            display: none;
+            gap: 8px;
+            align-items: center;
+        }
+        #tweet-btn {
+            cursor: pointer;
+            border: 1px solid #ff88ff;
+            background: rgba(40,0,40,0.85);
+            color: #fff;
+            font-family: 'Georgia', serif;
+            font-size: 14px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            box-shadow: 0 0 12px rgba(255,136,255,0.35);
+        }
+        #tweet-btn:hover { background: rgba(70,0,70,0.9); }
+        #tweet-note { color:#ffb7ff; font-size: 12px; opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+<div id="game-outer">
+    <div id="game-container">
+        <canvas id="gameCanvas" width="448" height="512"></canvas>
+
+        <div id="tweet-ui">
+            <button id="tweet-btn" type="button">Xでツイート</button>
+            <div id="tweet-note">クリア＆スコアを投稿</div>
+        </div>
+
+        <div id="side-panel">
+            <div style="font-size:16px; font-weight:bold; color:#ff88ff; text-align:center; margin-bottom:20px; border-bottom:2px solid #ff88ff;">CHECKER SHOOTING</div>
+            <div class="ui-label">Hi-Score</div>
+            <div class="ui-value" style="color:#ff8;" id="hi-score">0050000</div>
+            <div class="ui-label">Score</div>
+            <div class="ui-value" id="current-score">0000000</div>
+            <div class="ui-label">Graze</div>
+            <div class="ui-value" style="color:#00ffff;" id="ui-graze">0</div>
+            <hr style="border:0; border-top:1px solid #440044; margin:10px 0;">
+            <div class="ui-label">Player (Lives)</div>
+            <div id="ui-lives" class="icon-container"></div>
+            <div class="ui-label">Spell Cards (Bombs)</div>
+            <div id="ui-bombs" class="icon-container"></div>
+            <div class="ui-label">Next Life (P)</div>
+            <div class="ui-value" style="color:#ff0;"><span id="ui-power">0</span> / 8</div>
+            <div style="margin-top:auto;">
+                <div class="ui-label">Progress</div>
+                <div style="width:100%; height:12px; background:#202; border:1px solid #f8f; border-radius:6px; overflow:hidden;">
+                    <div id="ui-progress" style="width:0%; height:100%; background:linear-gradient(90deg, #f0f, #ff88ff);"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const uiScore = document.getElementById('current-score'), uiHiScore = document.getElementById('hi-score');
+    const uiLives = document.getElementById('ui-lives'), uiBombs = document.getElementById('ui-bombs');
+    const uiPower = document.getElementById('ui-power'), uiProgress = document.getElementById('ui-progress'), uiGraze = document.getElementById('ui-graze');
+
+    const tweetUI  = document.getElementById('tweet-ui');
+    const tweetBtn = document.getElementById('tweet-btn');
+
+    const img = {
+        ship: new Image(), tile: new Image(), itemP: new Image(), itemB: new Image(), boss: new Image(),
+        e1: new Image(), e2: new Image(), e3: new Image(), e5: new Image(), eZ: new Image(),
+        inu: new Image(), revin: new Image(), amakusa: new Image(), amakusaCore: new Image(),
+        ending: new Image()
+    };
+
+    img.ship.src = 'ship_center.png';
+    img.tile.src = 'tile_base.png';
+    img.itemP.src = 'item_powerup.png';
+    img.itemB.src = 'item_bomb.png';
+
+    img.boss.src = 'boss_core.png';
+
+    // 敵画像（貼られた5枚）
+    img.e1.src = 'enemy_scout.png';
+    img.eZ.src = 'enemy_zigzag.png';
+    img.e2.src = 'enemy_phantom.png';
+    img.e3.src = 'enemy_sniper.png';
+    img.e5.src = 'enemy_interceptor.png';
+
+    img.inu.src = 'inu_standing.png';
+    img.revin.src = 'revin_standing.png';
+    img.amakusa.src = 'amakusa_standing.png';
+    img.amakusaCore.src = 'amakusa_core.png';
+
+    img.ending.src = 'ending_square.png';
+
+    let audioCtx = null;
+
+    const bgmStage = new Audio('bgm_stage.mp3'); bgmStage.loop = true;
+    const bgmBoss  = new Audio('bgm_boss.mp3');  bgmBoss.loop  = true;
+    const bgmClear = new Audio('bgm_clear.mp3'); bgmClear.loop = true;
+
+    function canDraw(i) { return i && i.complete && i.naturalWidth > 0; }
+    function safePlay(audio){ try{ audio.play().catch(()=>{}); }catch(e){} }
+    function safePause(audio){ try{ audio.pause(); }catch(e){} }
+
+    let currentBGM = 'none';
+    function stopAllBGM(){
+        safePause(bgmStage); safePause(bgmBoss); safePause(bgmClear);
+        try{ bgmStage.currentTime = 0; }catch(e){}
+        try{ bgmBoss.currentTime  = 0; }catch(e){}
+        try{ bgmClear.currentTime = 0; }catch(e){}
+        currentBGM = 'none';
+    }
+    function setBGM(which){
+        if(which === currentBGM) return;
+        safePause(bgmStage); safePause(bgmBoss); safePause(bgmClear);
+        try{
+            if(which === 'stage'){ bgmStage.currentTime = 0; safePlay(bgmStage); }
+            else if(which === 'boss'){ bgmBoss.currentTime = 0; safePlay(bgmBoss); }
+            else if(which === 'clear'){ bgmClear.currentTime = 0; safePlay(bgmClear); }
+        }catch(e){}
+        currentBGM = which;
+    }
+
+    function playSE(f, t, d, v = 0.1) {
+        if (!audioCtx) return;
+        try{
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(v, audioCtx.currentTime);
+            g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + d);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }catch(e){}
+    }
+
+    function playBossClearSE(isFinal){
+        if (!audioCtx) return;
+        try{
+            const t0 = audioCtx.currentTime;
+
+            const o1 = audioCtx.createOscillator();
+            const g1 = audioCtx.createGain();
+            o1.type = 'sawtooth';
+            o1.frequency.setValueAtTime(90, t0);
+            o1.frequency.exponentialRampToValueAtTime(45, t0 + 0.45);
+            g1.gain.setValueAtTime(isFinal ? 0.55 : 0.42, t0);
+            g1.gain.exponentialRampToValueAtTime(0.001, t0 + 0.55);
+            o1.connect(g1); g1.connect(audioCtx.destination);
+            o1.start(t0); o1.stop(t0 + 0.56);
+
+            const o2 = audioCtx.createOscillator();
+            const g2 = audioCtx.createGain();
+            o2.type = 'square';
+            o2.frequency.setValueAtTime(220, t0 + 0.05);
+            o2.frequency.exponentialRampToValueAtTime(isFinal ? 1600 : 1200, t0 + (isFinal ? 1.2 : 0.85));
+            g2.gain.setValueAtTime(isFinal ? 0.18 : 0.14, t0 + 0.05);
+            g2.gain.exponentialRampToValueAtTime(0.001, t0 + (isFinal ? 1.25 : 0.9));
+            o2.connect(g2); g2.connect(audioCtx.destination);
+            o2.start(t0 + 0.05); o2.stop(t0 + (isFinal ? 1.26 : 0.92));
+
+            const chimes = isFinal ? 7 : 4;
+            for(let i=0;i<chimes;i++){
+                const oi = audioCtx.createOscillator();
+                const gi = audioCtx.createGain();
+                oi.type = 'sine';
+                const base = isFinal ? 1100 : 900;
+                oi.frequency.setValueAtTime(base + i*140, t0 + 0.18 + i*0.08);
+                gi.gain.setValueAtTime(isFinal ? 0.10 : 0.08, t0 + 0.18 + i*0.08);
+                gi.gain.exponentialRampToValueAtTime(0.001, t0 + 0.28 + i*0.08);
+                oi.connect(gi); gi.connect(audioCtx.destination);
+                oi.start(t0 + 0.18 + i*0.08);
+                oi.stop(t0 + 0.30 + i*0.08);
+            }
+        }catch(e){}
+    }
+
+    const W = 448, H = 512;
+    function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+    function inRange(x,y, pad=0){ return x>=-pad && x<=W+pad && y>=-pad && y<=H+pad; }
+
+    let spellCutin = 0;
+    let spellCutinImg = img.revin;
+
+    let bombCutin = 0;
+    let stageTitleTimer = 0;
+
+    function triggerSpellCutin(isMid){
+        spellCutin = 90;
+        spellCutinImg = isMid ? img.amakusa : img.revin;
+        playSE(520, 'square', 0.12, 0.10);
+        playSE(260, 'sawtooth', 0.18, 0.08);
+    }
+
+    function spawnBurst(x, y, colorA="#fff", colorB="#ffb7ff"){
+        const n = 18;
+        for(let i=0;i<n;i++){
+            const a = Math.random()*Math.PI*2;
+            const spd = 1.5 + Math.random()*4.0;
+            particles.push({
+                x, y,
+                vx: Math.cos(a)*spd,
+                vy: Math.sin(a)*spd,
+                life: 18 + Math.floor(Math.random()*14),
+                color: (Math.random()<0.6?colorA:colorB)
+            });
+        }
+    }
+
+    let hiScore = 50000, scene = 'TITLE', score = 0, graze = 0, frames = 0, progress = 0;
+    let lives = 2, bombs = 3, invincible = 0, bombEffect = 0, deathTimer = -1;
+    let bgScroll = 0, talkIdx = 0, midBossActive = false;
+    const STAGE_MAX = 7000;
+    let player = { x: 208, y: 400 };
+    let bullets = [], enemies = [], items = [], eb = [], particles = [];
+    let boss = { x: 124, y: -250, hp: 3000, maxHp: 3000, active: false, phase: 0, cutin: 0, label: "", isMid: false };
+    const keys = {};
+
+    let talkLeftImg = img.inu;
+    let talkRightImg = img.revin;
+    let nextBossIsMid = false;
+
+    let power = 0;
+    let powerExtra = 0;
+
+    const talkRevin = [
+        { name: "いぬ", text: "Revinさんじゃないですか。", side: "L" },
+        { name: "Revin", text: "宇宙はワシのもんや。", side: "R" },
+        { name: "いぬ", text: "え！？", side: "L" },
+        { name: "Revin", text: "お前は……", side: "R" },
+        { name: "Revin", text: "宇宙から追い出す。", side: "R" },
+        { name: "いぬ", text: "やるしかない、か。", side: "L" }
+    ];
+
+    const talkAmakusa = [
+        { name: "天草", text: "お、いぬじゃん。どうしたんだ", side: "R" },
+        { name: "いぬ", text: "天草さん！　宇宙で何やってるんですか！？", side: "L" },
+        { name: "天草", text: "え！？　ここ宇宙なの？", side: "R" },
+        { name: "いぬ", text: "早く帰らないと大変なことになりますよ！", side: "L" },
+        { name: "天草", text: "家に帰っても仕方ないんだよなぁ", side: "R" },
+        { name: "いぬ", text: "なら……【戦い】ますか", side: "L" },
+        { name: "天草", text: "男は争いしか、ないよな", side: "R" },
+        { name: "いぬ", text: "フン……", side: "L" }
+    ];
+
+    let currentTalk = [];
+
+    function updateTweetUI(){
+        tweetUI.style.display = (scene === 'CLEAR') ? 'flex' : 'none';
+    }
+
+    function openTweet(){
+        const text =
+            `CHECKER SHOOTING クリア！\n` +
+            `Score: ${score}\n` +
+            `Hi-Score: ${hiScore}\n`;
+        const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+    tweetBtn.addEventListener('click', openTweet);
+
+    window.onkeydown = e => {
+        keys[e.code] = true;
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        if (['TITLE', 'GAMEOVER', 'CLEAR'].includes(scene) && e.code === 'KeyZ') reset();
+
+        if (scene === 'TALK' && e.code === 'KeyZ') {
+            talkIdx++;
+            if (talkIdx >= currentTalk.length) { scene = 'BOSS'; startBoss(nextBossIsMid); }
+            else playSE(440, 'sine', 0.05, 0.05);
+        }
+
+        if (['PLAY', 'BOSS'].includes(scene) && e.code === 'KeyX' && bombs > 0 && deathTimer < 0 && bombEffect <= 0) {
+            bombs--;
+            bombEffect = 120;
+            invincible = 180;
+            eb = [];
+            bombCutin = 90;
+            playSE(150, 'sawtooth', 0.8, 0.4);
+        }
+    };
+    window.onkeyup = e => keys[e.code] = false;
+
+    function reset() {
+        score = 0; graze = 0; frames = 0; progress = 0; lives = 2; bombs = 3;
+        player = { x: 208, y: 400 }; invincible = 120; deathTimer = -1; midBossActive = false;
+        enemies = []; eb = []; bullets = []; items = []; particles = [];
+        boss = { x: 124, y: -250, hp: 3000, maxHp: 3000, active: false, phase: 0, cutin: 0, label: "", isMid: false };
+        scene = 'PLAY';
+        nextBossIsMid = false;
+        power = 0; powerExtra = 0;
+
+        spellCutin = 0; spellCutinImg = img.revin;
+        bombCutin = 0;
+
+        stageTitleTimer = 240;
+
+        stopAllBGM();
+        setBGM('stage');
+
+        updateTweetUI();
+    }
+
+    function startBoss(isMid) {
+        boss.active = true; boss.isMid = isMid;
+
+        if (isMid) {
+            boss.hp = 1300; boss.maxHp = 1300; boss.phase = 0;
+            boss.label = "スロット天草 開店のお知らせ";
+            boss.cutin = 45;
+            triggerSpellCutin(true);
+            playSE(600, 'square', 0.25, 0.25);
+        } else {
+            // ★Revinを硬すぎ→少し柔らかく
+            boss.hp = 4200; boss.maxHp = 4200; boss.phase = 0; boss.label = ""; boss.cutin = 0;
+            triggerSpellCutin(false);
+            setBGM('boss');
+        }
+    }
+
+    function triggerDeath() {
+        if (deathTimer >= 0 || invincible > 0) return;
+        deathTimer = 40; playSE(80, 'sawtooth', 0.5, 0.4);
+        for(let i=0; i<12; i++) particles.push({ x: player.x+16, y: player.y+16, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 15, color: "#fff" });
+    }
+
+    function spawnEnemy() {
+        const progRate = progress / STAGE_MAX;
+        const r = Math.random();
+        let type, hp, targetImg, size, vx = 0, vy = 2.5, count = 1;
+
+        if (progRate < 0.35) {
+            if (r < 0.65) { type='scout'; hp=1; targetImg=img.e1; vy=4.0; size=40; count=4; }
+            else { type='zigzag'; hp=2; targetImg=img.eZ; vy=3.2; size=48; count=3; vx = (Math.random()<0.5?-1:1)*1.8; }
+        } else if (progRate < 0.75) {
+            if (r < 0.50) { type='phantom'; hp=4; targetImg=img.e2; vy=2.2; size=64; count=2; }
+            else if (r < 0.80) { type='sniper'; hp=6; targetImg=img.e3; vy=1.9; size=52; count=2; }
+            else { type='zigzag'; hp=3; targetImg=img.eZ; vy=3.0; size=48; count=3; vx = (Math.random()<0.5?-1:1)*2.2; }
+        } else {
+            if (r < 0.80) { type='interceptor'; hp=30; targetImg=img.e5; vy=0.8; size=120; count=1; }
+            else { type='sniper'; hp=8; targetImg=img.e3; vy=2.0; size=56; count=2; }
+        }
+
+        let startX = Math.random() * (W - size);
+        for(let i = 0; i < count; i++){
+            enemies.push({
+                x: startX + (count > 1 ? (i - (count-1)/2) * (size + 15) : 0),
+                y: -size - (i * 60),
+                vx, vy, hp, type, img: targetImg, size
+            });
+        }
+    }
+
+    function spawnButterflyVolley(cx, cy){
+        const wingCount = 7;
+        for (let side of [-1, 1]) {
+            for (let k = 0; k < wingCount; k++) {
+                const base = Math.PI/2;
+                const spread = 0.20 + k * 0.10;
+                const ang = base + side * spread;
+                const spd = 2.6 + k * 0.18;
+                eb.push({ x: cx, y: cy, vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd, color: "#ffb7ff", ttl: 220 });
+            }
+        }
+        eb.push({ x: cx, y: cy, vx: 0.0, vy: 3.4, color: "#fff", ttl: 220 });
+        eb.push({ x: cx, y: cy, vx: 0.2, vy: 3.2, color: "#fff", ttl: 220 });
+        eb.push({ x: cx, y: cy, vx: -0.2, vy: 3.2, color: "#fff", ttl: 220 });
+    }
+
+    // ★妻子を殴ろう：塊 → 停止 → 花火拡散
+    function spawnClusterAim(){
+        const cx = boss.x + 100, cy = boss.y + 100;
+        const tx = player.x + 16, ty = player.y + 16;
+        const dx = tx - cx, dy = ty - cy;
+        const d = Math.max(1, Math.hypot(dx, dy));
+        const spd = 4.4;
+
+        eb.push({
+            x: cx, y: cy,
+            vx: (dx/d) * spd,
+            vy: (dy/d) * spd,
+            cluster: 1,
+            t: 0,
+            travel: 18,   // ここまで移動
+            wait: 10,     // 止まってから爆発まで
+            color: "#ffffff"
+        });
+    }
+
+    function explodeCluster(e){
+        // 花火：リング2段 + ランダム大量
+        const ring1 = 44;
+        for(let i=0;i<ring1;i++){
+            const a = (Math.PI*2/ring1) * i;
+            const spd = 2.0 + (i%4)*0.18;
+            eb.push({ x:e.x, y:e.y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, color:"#f0f", ttl: 220 });
+        }
+        const ring2 = 36;
+        for(let i=0;i<ring2;i++){
+            const a = (Math.PI*2/ring2) * i + 0.07;
+            const spd = 3.0 + (i%3)*0.22;
+            eb.push({ x:e.x, y:e.y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, color:"#ffb7ff", ttl: 210 });
+        }
+        const randN = 40;
+        for(let i=0;i<randN;i++){
+            const a = Math.random()*Math.PI*2;
+            const spd = 1.4 + Math.random()*3.8;
+            eb.push({ x:e.x, y:e.y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, color:"#fff", ttl: 180 });
+        }
+        playSE(260, 'square', 0.10, 0.08);
+        playSE(180, 'sine', 0.12, 0.07);
+    }
+
+    function firePlayerShot(){
+        bullets.push({ x: player.x + 14, y: player.y, vx: 0, vy: -18 });
+        if (power >= 8) {
+            bullets.push({ x: player.x + 14, y: player.y, vx: -2.2, vy: -17 });
+            bullets.push({ x: player.x + 14, y: player.y, vx:  2.2, vy: -17 });
+        }
+        playSE(900, 'triangle', 0.06, 0.04);
+    }
+
+    function update() {
+        if (['TITLE', 'GAMEOVER', 'CLEAR', 'TALK'].includes(scene)) return;
+
+        bgScroll = (bgScroll + (2 + (progress/STAGE_MAX)*6)) % 32;
+        frames++;
+
+        if (stageTitleTimer > 0) stageTitleTimer--;
+
+        if (deathTimer >= 0 && --deathTimer === 0) {
+            if (--lives < 0) scene = 'GAMEOVER';
+            else { player = { x: 208, y: 400 }; invincible = 120; }
+        }
+        if (invincible > 0) invincible--;
+
+        if (bombEffect > 0) {
+            bombEffect--;
+            if (frames % 2 === 0) {
+                enemies.forEach(e => e.hp -= 0.5);
+                if (boss.active) boss.hp -= 5;
+            }
+        }
+
+        if (spellCutin > 0) spellCutin--;
+        if (bombCutin > 0) bombCutin--;
+
+        if (deathTimer < 0) {
+            let s = keys['ShiftLeft'] ? 2.5 : 5.5;
+            if (keys['ArrowUp'] && player.y > 5) player.y -= s;
+            if (keys['ArrowDown'] && player.y < 475) player.y += s;
+            if (keys['ArrowLeft'] && player.x > 5) player.x -= s;
+            if (keys['ArrowRight'] && player.x < 410) player.x += s;
+
+            if (keys['KeyZ'] && frames % 7 === 0) firePlayerShot();
+        }
+
+        bullets = bullets.filter(b => {
+            b.x += (b.vx || 0);
+            b.y += b.vy;
+            return b.y > -50 && b.x > -60 && b.x < W+60;
+        });
+
+        if (scene === 'PLAY') {
+            progress++;
+
+            if (progress === Math.floor(STAGE_MAX * 0.4) && !midBossActive) {
+                midBossActive = true;
+                scene = 'TALK';
+                talkIdx = 0;
+                currentTalk = talkAmakusa;
+                talkLeftImg = img.inu;
+                talkRightImg = img.amakusa;
+                nextBossIsMid = true;
+            }
+
+            if (progress >= STAGE_MAX) {
+                scene = 'TALK';
+                talkIdx = 0;
+                currentTalk = talkRevin;
+                talkLeftImg = img.inu;
+                talkRightImg = img.revin;
+                nextBossIsMid = false;
+            }
+
+            if (frames % 70 === 0) spawnEnemy();
+        }
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
+            e.y += e.vy;
+            if (e.type === 'zigzag') {
+                e.x += e.vx;
+                if (e.x < 0 || e.x > W - e.size) e.vx *= -1;
+            }
+
+            if (frames % 100 === 0) {
+                let dx = (player.x + 16) - (e.x + e.size/2), dy = (player.y + 16) - (e.y + e.size/2), d = Math.max(1, Math.hypot(dx, dy));
+                eb.push({ x: e.x + e.size/2, y: e.y + e.size/2, vx: (dx/d)*3, vy: (dy/d)*3, ttl: 220 });
+            }
+
+            if (deathTimer < 0 && invincible <= 0 && Math.hypot(player.x+16-(e.x+e.size/2), player.y+16-(e.y+e.size/2)) < e.size/3.5) triggerDeath();
+
+            for (let j = bullets.length - 1; j >= 0; j--) {
+                const b = bullets[j];
+                if (b.x > e.x && b.x < e.x + e.size && b.y > e.y && b.y < e.y + e.size) {
+                    e.hp--; bullets.splice(j, 1);
+                    if (e.hp <= 0) {
+                        spawnBurst(e.x + e.size/2, e.y + e.size/2);
+                        score += 500; if (score > hiScore) hiScore = score;
+                        playSE(200, 'sawtooth', 0.1);
+
+                        const rr = Math.random();
+                        if (rr < 0.03) items.push({ x: e.x + e.size/2, y: e.y + e.size/2, vy: 2, type: 'B' });
+                        else if (rr < 0.21) items.push({ x: e.x + e.size/2, y: e.y + e.size/2, vy: 2, type: 'P' });
+
+                        enemies.splice(i, 1);
+                    }
+                    break;
+                }
+            }
+
+            if (e.y > 600) enemies.splice(i, 1);
+        }
+
+        items = items.filter(it => {
+            it.y += it.vy;
+            if (deathTimer < 0 && Math.hypot(player.x+16-it.x, player.y+16-it.y) < 40) {
+                if (it.type === 'P') {
+                    if (power < 8) { power++; playSE(1200, 'sine', 0.08, 0.07); }
+                    else {
+                        powerExtra++;
+                        if (powerExtra >= 8) { lives++; powerExtra = 0; playSE(1500, 'sine', 0.4, 0.25); }
+                        else playSE(1000, 'sine', 0.06, 0.05);
+                    }
+                } else {
+                    bombs = Math.min(8, bombs + 1);
+                    playSE(900, 'square', 0.10, 0.08);
+                }
+                score += 100;
+                return false;
+            }
+            return it.y < 550;
+        });
+
+        if (scene === 'BOSS' && boss.active) {
+            boss.y = Math.min(boss.y + 1, 60);
+            boss.x = 124 + Math.sin(frames * 0.02) * 80;
+            if (boss.cutin > 0) boss.cutin--;
+
+            if (boss.isMid) {
+                if (boss.phase === 0 && boss.hp < 520) {
+                    boss.phase = 1;
+                    boss.label = "値付かぬ標本";
+                    boss.cutin = 55;
+                    triggerSpellCutin(true);
+                    playSE(600, 'square', 0.25, 0.25);
+                }
+
+                if (boss.phase === 0) {
+                    if (frames % 9 === 0) {
+                        for(let k=0; k<2; k++){
+                            const sx = clamp(boss.x + 70 + k*60, 10, W-10);
+                            const sy = clamp(boss.y + 110, 10, H-10);
+                            eb.push({ x: sx, y: sy, vx: (Math.random()-0.5)*0.6, vy: 4.2 + Math.random()*2.2, color: "#ff0", ttl: 220 });
+                        }
+                    }
+                } else {
+                    if (frames % 26 === 0) spawnButterflyVolley(clamp(boss.x + 100, 10, W-10), clamp(boss.y + 110, 10, H-10));
+                }
+            } else {
+                // ★HP調整に合わせてフェーズ閾値も軽く調整
+                if (boss.phase === 0 && boss.hp < 3000) {
+                    boss.phase = 1; boss.label = "妻子を殴ろう"; boss.cutin = 90;
+                    triggerSpellCutin(false);
+                    playSE(600, 'square', 0.5, 0.3);
+                }
+                if (boss.phase === 1 && boss.hp < 1200) {
+                    boss.phase = 2; boss.label = "松井山手の憂鬱"; boss.cutin = 90;
+                    triggerSpellCutin(false);
+                    playSE(600, 'square', 0.5, 0.3);
+                }
+
+                if (boss.phase === 1) {
+                    // ★妻子を殴ろう：塊を連射（止まって花火）
+                    if (frames % 28 === 0) spawnClusterAim();
+                    if (frames % 56 === 0) spawnClusterAim();
+                } else {
+                    if (frames % 30 === 0) {
+                        let count = 12 + boss.phase * 8;
+                        const cx = clamp(boss.x + 100, 10, W-10);
+                        const cy = clamp(boss.y + 100, 10, H-10);
+                        for (let i = 0; i < count; i++) {
+                            let a = i * (Math.PI * 2 / count) + (frames * 0.05);
+                            eb.push({ x: cx, y: cy, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, ttl: 240 });
+                        }
+                    }
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                if (b.x > boss.x && b.x < boss.x + 200 && b.y > boss.y && b.y < boss.y + 200) {
+                    boss.hp--; bullets.splice(i, 1);
+                    if (boss.hp <= 0) {
+                        playBossClearSE(!boss.isMid);
+
+                        if (boss.isMid) {
+                            boss.active = false; scene = 'PLAY'; eb = [];
+                            stopAllBGM();
+                            setBGM('stage');
+                        } else {
+                            scene = 'CLEAR';
+                            stopAllBGM();
+                            setBGM('clear');
+                        }
+                        updateTweetUI();
+                        break;
+                    }
+                }
+            }
+        }
+
+        // ===== 弾更新：clusterは専用ロジックで「止まって花火」を保証 =====
+        eb = eb.filter(e => {
+            // cluster（妻子を殴ろう）
+            if (e.cluster) {
+                e.t++;
+
+                // 移動フェーズ
+                if (e.t <= e.travel) {
+                    e.x += e.vx; e.y += e.vy;
+                } else {
+                    // 停止フェーズ
+                    e.vx = 0; e.vy = 0;
+                }
+
+                // 画面外なら消す（見えない所から突然出てくる原因を減らす）
+                if (!inRange(e.x, e.y, 120)) return false;
+
+                // 当たり判定＆グレイズ
+                if (bombEffect > 0) return false;
+                let d = Math.hypot(e.x - (player.x + 16), e.y - (player.y + 16));
+                if (d < 30 && d > 10 && !e.g) { e.g = 1; graze++; score += 50; playSE(1800, 'sine', 0.05, 0.02); }
+                if (deathTimer < 0 && invincible <= 0 && d < 10) triggerDeath();
+
+                // 爆発タイミング（停止して少し待って花火）
+                if (e.t >= e.travel + e.wait) {
+                    explodeCluster(e);
+                    return false;
+                }
+                return true;
+            }
+
+            // 通常弾
+            if (typeof e.ttl === 'number') { e.ttl--; if (e.ttl <= 0) return false; }
+
+            e.x += e.vx; e.y += e.vy;
+            if (bombEffect > 0) return false;
+            if (!inRange(e.x, e.y, 40)) return false;
+
+            let d = Math.hypot(e.x - (player.x + 16), e.y - (player.y + 16));
+            if (d < 30 && d > 10 && !e.g) { e.g = 1; graze++; score += 50; playSE(1800, 'sine', 0.05, 0.02); }
+            if (deathTimer < 0 && invincible <= 0 && d < 8) triggerDeath();
+            return true;
+        });
+
+        particles = particles.filter(p => {
+            p.x += p.vx; p.y += p.vy;
+            p.life--;
+            p.vx *= 0.92; p.vy *= 0.92;
+            return p.life > 0;
+        });
+    }
+
+    function drawStageTitle(){
+        if (stageTitleTimer <= 0) return;
+
+        let a = 1;
+        if (stageTitleTimer > 200) a = (240 - stageTitleTimer) / 40;
+        else if (stageTitleTimer < 40) a = stageTitleTimer / 40;
+        a = Math.max(0, Math.min(1, a));
+
+        ctx.save();
+        ctx.globalAlpha = a;
+
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(0, 160, W, 92);
+
+        ctx.strokeStyle = "rgba(255,136,255,0.55)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(20, 168); ctx.lineTo(W-20, 168);
+        ctx.moveTo(20, 244); ctx.lineTo(W-20, 244);
+        ctx.stroke();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "italic 22px Georgia";
+        ctx.fillText("Stage 1", W/2, 198);
+
+        ctx.fillStyle = "#ffb7ff";
+        ctx.font = "bold 26px Georgia";
+        ctx.fillText("ユーストリームチェッカーの宇宙", W/2, 232);
+
+        ctx.textAlign = "left";
+        ctx.restore();
+    }
+
+    function draw() {
+        update();
+
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 448, 512);
+        for (let i = 0; i < 14; i++) for (let j = -1; j < 17; j++) if (canDraw(img.tile)) ctx.drawImage(img.tile, i*32, j*32+bgScroll, 32, 32);
+        ctx.fillStyle = `rgba(${Math.min(70, (progress/STAGE_MAX)*120)}, 0, 40, 0.3)`; ctx.fillRect(0, 0, 448, 512);
+
+        if (['PLAY', 'BOSS', 'TALK'].includes(scene)) {
+            if (scene !== 'TALK' && deathTimer < 0 && !(invincible > 0 && frames % 4 < 2)) {
+                if (canDraw(img.ship)) ctx.drawImage(img.ship, player.x, player.y, 32, 32);
+            }
+
+            enemies.forEach(e => {
+                if (canDraw(e.img)) ctx.drawImage(e.img, e.x, e.y, e.size, e.size);
+                else {
+                    ctx.fillStyle = "rgba(255,0,255,0.35)";
+                    ctx.fillRect(e.x, e.y, e.size, e.size);
+                }
+            });
+
+            items.forEach(it => {
+                const itImg = (it.type==='P'?img.itemP:img.itemB);
+                if (canDraw(itImg)) ctx.drawImage(itImg, it.x-16, it.y-16, 32, 32);
+            });
+
+            if (boss.active) {
+                let bimg = boss.isMid ? img.amakusaCore : img.boss;
+                if (canDraw(bimg)) ctx.drawImage(bimg, boss.x, boss.y, 200, 200);
+                ctx.fillStyle = "#f0f";
+                ctx.fillRect(boss.x, boss.y - 10, Math.max(0, (boss.hp / boss.maxHp) * 200), 6);
+            }
+
+            ctx.fillStyle = '#fff'; bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 12));
+
+            eb.forEach(e => {
+                if (e.cluster) {
+                    ctx.fillStyle = "#fff";
+                    ctx.beginPath(); ctx.arc(e.x, e.y, 10, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = "rgba(255,255,255,0.35)";
+                    ctx.beginPath(); ctx.arc(e.x, e.y, 16, 0, Math.PI*2); ctx.fill();
+                } else {
+                    ctx.fillStyle = e.color || '#f0f';
+                    ctx.beginPath(); ctx.arc(e.x, e.y, 5, 0, 7); ctx.fill();
+                }
+            });
+
+            particles.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
+
+            if (bombCutin > 0) {
+                ctx.save();
+                ctx.globalAlpha = bombCutin / 90;
+                if (canDraw(img.inu)) ctx.drawImage(img.inu, 250 - (bombCutin*2), 100, 300, 400);
+                ctx.fillStyle = "rgba(255,0,255,0.5)"; ctx.fillRect(0, 300, 448, 40);
+                ctx.fillStyle = "#fff"; ctx.font = "bold 24px serif";
+                ctx.fillText("Spell Card: 猛 犬 注 意", 40, 330);
+                ctx.restore();
+            }
+
+            if (spellCutin > 0) {
+                ctx.save();
+                ctx.globalAlpha = spellCutin / 90;
+                if (canDraw(spellCutinImg)) ctx.drawImage(spellCutinImg, 250 - (spellCutin*2), 100, 300, 400);
+                ctx.fillStyle = "rgba(255,0,255,0.45)"; ctx.fillRect(0, 300, 448, 40);
+                ctx.fillStyle = "#fff"; ctx.font = "bold 22px serif";
+                ctx.fillText("Spell Card", 40, 328);
+                ctx.restore();
+            }
+
+            if (boss.cutin > 0) {
+                const alpha = Math.min(1, boss.cutin / 55);
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = "rgba(0,0,0,0.45)"; ctx.fillRect(0, 50, 448, 30);
+                ctx.fillStyle = "#fff"; ctx.font = "bold 20px serif";
+                ctx.textAlign = "right"; ctx.fillText(boss.label, 430, 72); ctx.textAlign = "left";
+                ctx.restore();
+            }
+
+            if (scene === 'PLAY') drawStageTitle();
+        }
+
+        if (scene === 'TALK') {
+            const cur = currentTalk[talkIdx];
+
+            ctx.save();
+            ctx.globalAlpha = (cur.side === "L" ? 1 : 0.35);
+            if (canDraw(talkLeftImg)) ctx.drawImage(talkLeftImg, -80, 150, 300, 400);
+            ctx.restore();
+
+            ctx.save();
+            ctx.globalAlpha = (cur.side === "R" ? 1 : 0.35);
+            if (canDraw(talkRightImg)) ctx.drawImage(talkRightImg, 220, 150, 300, 400);
+            ctx.restore();
+
+            ctx.fillStyle = "rgba(0,0,30,0.9)"; ctx.fillRect(10, 380, 428, 120);
+            ctx.fillStyle = "#fff"; ctx.font = "18px sans-serif";
+            ctx.fillText(cur.name + ": " + cur.text, 40, 440);
+
+        } else if (scene === 'CLEAR') {
+            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, 448, 512);
+
+            if (canDraw(img.ending)) {
+                const size = 260;
+                const x = (W - size) / 2;
+                const y = 85;
+                ctx.drawImage(img.ending, x, y, size, size);
+                ctx.strokeStyle = 'rgba(255,136,255,0.7)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, size, size);
+            }
+
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+            ctx.font = '28px serif';
+            ctx.fillText("体験版をプレイしてくれてありがとう！", 224, 60);
+
+            ctx.font = '24px serif';
+            ctx.fillText("Hi-Score: " + hiScore, 224, 400);
+            ctx.fillText("Score: " + score, 224, 438);
+
+            ctx.font = '18px serif';
+            ctx.fillText("Press Z to Title", 224, 485);
+            ctx.textAlign = 'left';
+
+        } else if (scene === 'TITLE' || scene === 'GAMEOVER') {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, 448, 512);
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+            ctx.font = '30px Georgia';
+            ctx.fillText(scene === 'TITLE' ? "CHECKER SHOOTING" : "GAME OVER", 224, 240);
+            ctx.font = '20px Georgia';
+            ctx.fillText("Press Z to Start", 224, 300);
+            ctx.textAlign = 'left';
+        }
+
+        uiScore.innerText = score.toString().padStart(7, '0');
+        uiHiScore.innerText = hiScore.toString().padStart(7, '0');
+        uiGraze.innerText = graze;
+
+        uiLives.innerHTML = '<span class="star-p">★</span>'.repeat(Math.max(0, lives));
+        uiBombs.innerHTML = '<span class="star-b">★</span>'.repeat(Math.max(0, bombs));
+
+        uiPower.innerText = (power >= 8 ? powerExtra : power);
+        uiProgress.style.width = (progress / STAGE_MAX * 100) + "%";
+
+        updateTweetUI();
+        requestAnimationFrame(draw);
+    }
+
+    draw();
+</script>
+</body>
+</html>
