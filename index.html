@@ -719,43 +719,21 @@ if (boss.phase === 1) {
     if (frames % 48 === 6) spawnClusterAim();
 
     // ★追加：画面下から縦に湧き出る弾
-    if (frames % 4 === 0)
-        spawnBottomRisers(6, 5.2, 22, "#ffffff", 260);
-
-    if (frames % 18 === 0)
-        spawnBottomRisers(10, 4.2, 26, "#ffb7ff", 320);
+    if (frames % 4 === 0)  spawnBottomRisers(6, 5.2, 22, "#ffffff", 260);
+    if (frames % 18 === 0) spawnBottomRisers(10, 4.2, 26, "#ffb7ff", 320);
 
 } else {
-
-    // ★ phase 2 以降の既存弾幕（そのまま）
+    // phase 2 以降（元のやつ）
     if (frames % 30 === 0) {
         let count = 12 + boss.phase * 8;
         const cx = clamp(boss.x + 100, 10, W-10);
         const cy = clamp(boss.y + 100, 10, H-10);
         for (let i = 0; i < count; i++) {
             let a = i * (Math.PI * 2 / count) + (frames * 0.05);
-            eb.push({
-                x: cx,
-                y: cy,
-                vx: Math.cos(a) * 3,
-                vy: Math.sin(a) * 3,
-                ttl: 240
-            });
+            eb.push({ x: cx, y: cy, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, ttl: 240 });
         }
     }
 }
-
-                    if (frames % 30 === 0) {
-                        let count = 12 + boss.phase * 8;
-                        const cx = clamp(boss.x + 100, 10, W-10);
-                        const cy = clamp(boss.y + 100, 10, H-10);
-                        for (let i = 0; i < count; i++) {
-                            let a = i * (Math.PI * 2 / count) + (frames * 0.05);
-                            eb.push({ x: cx, y: cy, vx: Math.cos(a) * 3, vy: Math.sin(a) * 3, ttl: 240 });
-                        }
-                    }
-                }
-            }
 
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i];
@@ -1018,6 +996,7 @@ if (!inRange(e.x, e.y, 120)) return false;
 </script>
 </body>
 </html>
+
 
 
 
