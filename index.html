@@ -454,24 +454,30 @@ function spawnClusterAim(){
 
 
 function explodeCluster(e){
+
     // 1) まずリング（避けさせる骨格）
     const ring = e.small ? 28 : 40;
     for(let i=0;i<ring;i++){
         const a = (Math.PI*2/ring) * i + (e.small ? 0.05 : 0);
         const spd = (e.small ? 2.6 : 2.2) + (i%4)*0.16;
-        eb.push({ x:e.x, y:e.y, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd, color:"#ffb7ff", ttl: 220 });
+        eb.push({
+            x:e.x, y:e.y,
+            vx:Math.cos(a)*spd,
+            vy:Math.sin(a)*spd,
+            color:"#ffb7ff",
+            ttl: 220
+        });
     }
 
-    // 2) ここが本命：「殴る」＝プレイヤー狙いの濃い散弾（コーン状）
+    // 2) 本命：プレイヤーを「殴る」狙い弾（コーン状）
     const tx = player.x + 16, ty = player.y + 16;
     const dx = tx - e.x, dy = ty - e.y;
     const base = Math.atan2(dy, dx);
 
-    // 濃さ：大型なら多め、小型でも十分痛い
     const n = e.small ? 36 : 60;
-    const spread = e.small ? 0.55 : 0.75; // 角度の広がり
+    const spread = e.small ? 0.55 : 0.75;
     for(let i=0;i<n;i++){
-        const t = (i/(n-1))*2 - 1;               // -1..1
+        const t = (i/(n-1))*2 - 1;   // -1..1
         const ang = base + t*spread + (Math.random()-0.5)*0.05;
         const spd = (e.small ? 3.6 : 4.2) + Math.random()*1.6;
         eb.push({
@@ -482,6 +488,8 @@ function explodeCluster(e){
             ttl: 200
         });
     }
+}
+
 
     // 3) 追い打ち：少し遅い弾も混ぜて「抜けたと思ったら刺さる」やつ
     const n2 = e.small ? 18 : 26;
@@ -673,11 +681,25 @@ function explodeCluster(e){
                     playSE(600, 'square', 0.5, 0.3);
                 }
 
-     if (boss.phase === 1) {
-// ★妻子を殴ろう：殴り塊を高圧で叩き込む（周期短め＋間欠2連）
+if (boss.phase === 1) {
+    // ★妻子を殴ろう：塊（花火）＋ 自機狙い扇状弾で「殴ってくる」圧を出す
     if (frames % 24 === 0) spawnClusterAim();
-    if (frames % 48 === 6) spawnClusterAim(); // 少しズラして圧を上げる
+    if (frames % 48 === 6) spawnClusterAim();
+
+    const cx = clamp(boss.x + 100, 10, W-10);
+    const cy = clamp(boss.y + 120, 10, H-10);
+
+    // メイン：自機狙いの太い扇（届くやつ）
+    if (frames % 12 === 0) {
+        fireAimFan(cx, cy, 9, 0.55, 4.6, 6.0, "#fff", 420);
+    }
+
+    // 追撃：少し遅い弾を混ぜて「抜けたと思ったら刺さる」
+    if (frames % 24 === 10) {
+        fireAimFan(cx, cy, 6, 0.35, 3.2, 4.2, "#ffb7ff", 520);
+    }
 } else {
+
 
                     if (frames % 30 === 0) {
                         let count = 12 + boss.phase * 8;
@@ -951,6 +973,7 @@ function explodeCluster(e){
 </script>
 </body>
 </html>
+
 
 
 
